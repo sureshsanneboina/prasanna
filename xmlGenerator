@@ -1,0 +1,40 @@
+String soapNS = 'http://schemas.xmlsoap.org/soap/envelope/';
+String xsi = 'http://www.w3.org/2001/XMLSchema-instance';
+String serviceNS = 'http://www.myservice.com/services/MyService/';
+String b2b='http://transform.genworth.com/b2bTransformationService/';
+String ds = 'http://www.w3.org/2000/09/xmldsig#';
+
+DOM.Document doc = new DOM.Document();
+dom.XmlNode envelope= doc.createRootElement('Envelope', soapNS, 'soapenv');
+envelope.setNamespace('b2b', b2b);
+dom.XmlNode header= envelope.addChildElement('Header', soapNS, 'soapenv');
+dom.XmlNode signedInfoNode=header.addChildElement('Signature', ds, 'ds').addChildElement('SignedInfo', ds, null);
+dom.XmlNode CanonicalizationMethod=signedInfoNode.addChildElement('CanonicalizationMethod', ds, 'ds');
+CanonicalizationMethod.setAttributeNS('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315', null, null);
+dom.XmlNode SignatureMethod=signedInfoNode.addChildElement('SignatureMethod', ds, 'ds');
+SignatureMethod.setAttributeNS('Algorithm', 'http://www.w3.org/2000/09/xmldsig#rsa-sha1', null, null);
+dom.XmlNode Reference=signedInfoNode.addChildElement('Reference', ds, 'ds');
+Reference.setAttributeNS('URI', '#body-id', null, null);
+dom.XmlNode Transform=Reference.addChildElement('Transforms', ds, 'ds').addChildElement('Transform', ds, 'ds');
+Transform.setAttributeNS('Algorithm', 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315', null, null);
+Reference.addChildElement('DigestMethod', ds, 'ds').setAttributeNS('Algorithm', 'http://www.w3.org/2000/09/xmldsig#sha1', null, null);
+Reference.addChildElement('DigestValue', ds, 'ds').addTextNode('+VJ+mZIPNRV7pJBqfx6DJFKEQ7A=');
+
+signedInfoNode.addChildElement('SignatureValue', ds, 'ds').addTextNode('ZOupfAo8RwI4JxsikOOiFI1NTCf0TmiHYaOl');
+dom.XmlNode KeyInfo=signedInfoNode.addChildElement('KeyInfo', ds, 'ds');
+dom.XmlNode X509Data=KeyInfo.addChildElement('X509Data', ds, 'ds');
+X509Data.addChildElement('X509Certificate', ds, 'ds').addTextNode('MIIDlTCCAn2gAwIBAgIENV4sAzANBgkqhkiG9w0BAQsFADB7MQswCQYDVQQGEwJBVTEMMAoGA1UE');
+dom.XmlNode KeyValue=KeyInfo.addChildElement('KeyValue', ds, 'ds');
+dom.XmlNode RSAKeyValue=KeyValue.addChildElement('RSAKeyValue', ds, 'ds');
+RSAKeyValue.addChildElement('Modulus', ds, 'ds').addTextNode('sDC1TnrpwExP0FY9LDcynoIom1PrXsFkezC0N5p');
+RSAKeyValue.addChildElement('Exponent', ds, 'ds').addTextNode('AQAB');
+
+dom.XmlNode body= envelope.addChildElement('Body', soapNS, null);
+body.setAttributeNS('id', 'body-id', null, null);
+dom.XmlNode interrogateDocument=body.addChildElement('interrogateDocument', b2b, 'b2b');
+interrogateDocument.addChildElement('transid', null, null).addTextNode('1234');
+dom.XmlNode AVOKA=interrogateDocument.addChildElement('in', null, null).addChildElement('AVOKA', null, null);
+dom.XmlNode AvokaSmartForm=AVOKA.addChildElement('AvokaSmartForm', null, null);
+dom.XmlNode Attachments=AVOKA.addChildElement('Attachments', null, null);
+
+System.debug(doc.toXmlString());
