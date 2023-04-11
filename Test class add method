@@ -1,0 +1,15 @@
+@isTest static void getAppointmentForCheckInapptid(){
+        
+        List<Event> lstEvent=[Select Id from Event limit 1];
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('appt-id', lstEvent[0].Id);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        Test.stopTest();
+    }
