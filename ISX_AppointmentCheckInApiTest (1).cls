@@ -1,0 +1,668 @@
+@isTest
+private class ISX_AppointmentCheckInApiTest {
+
+    @testSetup
+    public static void TestData() {
+        test.startTest();
+        User sysAdmin = [select id from user where profile.name like '%system admin%'
+            and isActive = TRUE limit 1
+        ];
+        User salesConsultant1;
+        String storeNum = '8901';
+
+        /*KMX_Apex_Custom_Settings__c testCustomSettings = new KMX_Apex_Custom_Settings__c();
+        testCustomSettings.Name = 'Settings';
+        testCustomSettings.OriginationForCallout__c = 'CRM';
+        testCustomSettings.SendOppTeamMemberActive__c = false; 
+        upsert testCustomSettings;*/
+
+        System.runAs(sysAdmin) {
+            Location__c testLoc = new Location__c();
+            testLoc.Store_Name__c = 'TestMax9999';
+            testLoc.Store_Number__c = storeNum;
+            testLoc.CRM_Active__c = true;
+            upsert testLoc;
+
+            Profile scProfile = [SELECT Id FROM Profile limit 1];
+            //UserRole scRole = [SELECT Id FROM UserRole WHERE Name LIKE '%SC Trad%' OR Name LIKE '%SC -%' LIMIT 1];
+            //User userI = createTestUser('1sc',scRole.Id,scProfile.Id,storeNum,'Ups List');
+            //insert userI;
+
+            //RecordType pAccRecordType = [SELECT Id, sObjectType, Name FROM RecordType WHERE Name='Person Account' AND sObjectType = 'Account' LIMIT 1];
+            Account testAccount = new Account();
+            //testAccount.RecordTypeId = pAccRecordType.Id;
+            testAccount.Name = 'test';
+            //testAccount.LastName = 'account';
+            testAccount.Phone = '8045551212';
+            //testAccount.Email ='test@example.com';
+            //testAccount.URI__c = 'name';
+            insert testAccount;
+
+            opportunity opp = new opportunity();
+            opp.Name = 'point test opp';
+            opp.stageName = 'Finance';
+            //opp.OwnerId = userI.id;
+            opp.CloseDate = Date.TODAY().addDays(4);
+            //opp.Home_Delivery_Flag__c = FALSE;
+            opp.LeadSource = 'Web';
+            //opp.Established_Dialog__c = false;
+            opp.accountId = testAccount.id;
+            insert opp;
+
+            Lead leadObj = new Lead();
+            leadObj.FirstName = 'MockOne';
+            leadObj.LastName = 'MockOne';
+            leadObj.phone = '9234567890';
+            leadObj.Company = 'test';
+            //leadObj.Store_Location_Number__c = '7102';
+            insert leadObj;
+
+            List < Event > apptToInsert = new List < Event > ();
+            Event appt = new Event();
+            appt.StartDatetime = datetime.now();
+            appt.Location = testLoc.Store_Number__c;
+            //appt.Assigned_Store__c = testLoc.Id;
+            appt.Appointment_Status__c = 'Open';
+            appt.Appointment_type__c = 'Browse;hold;Finance;Appraisal';
+            appt.WhatId = opp.id;
+            appt.DurationInMinutes = 60;
+            apptToInsert.add(appt);
+
+            Event leadAppt = new Event();
+            leadAppt.StartDatetime = datetime.now();
+            leadAppt.Location = testLoc.Store_Number__c;
+            //leadAppt.Assigned_Store__c = testLoc.Id;
+            leadAppt.Appointment_Status__c = 'Open';
+            leadAppt.Appointment_type__c = 'Browse;hold;Finance;Appraisal';
+            leadAppt.WhoId = leadObj.id;
+            leadAppt.DurationInMinutes = 60;
+            apptToInsert.add(leadAppt);
+            insert apptToInsert;
+
+        }
+        test.stopTest();
+    }
+
+    private static User createTestUser(String i, Id roleId, Id profileId, String storeNum, String status) {
+        User returnUser = new User();
+        returnUser.FirstName = storeNum + ' TestUps' + i;
+        returnUser.LastName = storeNum + 'UpsConsultant' + i;
+        returnUser.Email = 'TstSlsCslt' + i + '@carmax.com';
+        returnUser.UserName = 'TestUpsconsultant' + i + '@checkedinPoint.com';
+        returnUser.Alias = 'tups' + i;
+        returnUser.UserRoleId = roleId;
+        returnUser.ProfileId = profileId;
+        returnUser.TimeZoneSidKey = 'America/New_York';
+        returnUser.LocaleSidKey = 'en_US';
+        returnUser.EmailEncodingKey = 'UTF-8';
+        returnUser.LanguageLocaleKey = 'en_US';
+        //returnUser.StoreNum__c = storeNum;
+        //returnUser.Active_Location__c = storeNum;
+        //returnUser.Status__c = status;
+
+        return returnUser;
+    }
+    
+    public static Lead createLeadWithPhoneNumber(String phoneNumber) {
+        return new Lead(
+            FirstName = 'MockOne',
+            LastName = 'MockOne',
+            Phone = phoneNumber,
+            Company = 'Salesforce',
+            Status = ''
+        ); //Store_Location_Number__c = '7102'
+    }
+
+    public static List < Account > createAccountsWithPhoneNumber(Integer numAccts, string phoneNumber) {
+        List < Account > accts = new List < Account > ();
+        //List<RecordType> personAccts = [SELECT Id, sObjectType, Name FROM RecordType WHERE Name='Person Account' AND sObjectType = 'Account' LIMIT 1];
+        for (Integer i = 0; i < numAccts; i++) {
+            Account a = new Account();
+            //a.RecordTypeId = personAccts[0].Id;
+            a.Name = 'TestAccount' + i;
+            a.Phone = phoneNumber;
+            accts.add(a);
+        }
+
+        return accts;
+    }
+
+    Public static List < Opportunity > createOpportunitiesForAccount(Integer numOppsPerAcct, List < Account > accts) {
+        List < Opportunity > opps = new List < Opportunity > ();
+        for (Integer i = 0; i < accts.size(); i++) {
+            Account acct = accts[i];
+            for (Integer j = 0; j < numOppsPerAcct; j++) {
+                opps.add(new Opportunity(Name = acct.Name + ' Opportunity ' + j,
+                    StageName = 'Prospecting',
+                    CloseDate = System.today().addMonths(1),
+                    AccountId = acct.Id));
+            }
+        }
+        return opps;
+    }
+
+    Public static List < Event > createEventsForOpportunity(Integer numEventPerOpp, List < Opportunity > opps, string appType, string leadType) {
+        List < Event > apps = new List < Event > ();
+        for (Integer i = 0; i < opps.size(); i++) {
+            Opportunity opp = opps[i];
+            for (Integer j = 0; j < numEventPerOpp; j++) {
+                apps.add(new Event(WhatId = opp.Id,
+                    Appointment_Status__c = 'Open',
+                    StartDateTime = System.now(),
+                    DurationInMinutes = 2,
+                    Appointment_Type__c = appType,
+                    Lead_Type__c = leadType));
+            }
+        }
+
+        return apps;
+    }
+    
+    @isTest static void getAppointmentForCheckInapptid() {
+
+        List < Event > lstEvent = [Select Id from Event limit 1];
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('appt-id', lstEvent[0].Id);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        Test.stopTest();
+    }
+
+    @isTest static void GetCallReturnsBadRequestWhenNoDatapointPorvided() {
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void GetCallReturnsBadRequestWhenBadPhoneNumberProvided() {
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', '123');
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenUnconnectedPhoneNumberIsProvided() {
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', '1234567890');
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void GetCallReturnsLeadPhoneNumberProvided() {
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', '9234567890');
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenUnconnectedCrmidIsProvided() {
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('crm-id', '1234567890');
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenUnconnectedKmxidIsProvided() {
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('kmx-id', '1234567890');
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenPhoneNumberIsConnectedToMultipleCustomer() {
+        string phoneNumber = '1234567890';
+        Account[] accts = createAccountsWithPhoneNumber(2, phoneNumber);
+        insert accts;
+
+        Test.startTest();
+
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', phoneNumber);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+
+        Database.DeleteResult result = Database.delete(accts[0], false);
+        System.assert(result.isSuccess());
+        result = Database.delete(accts[1], false);
+        System.assert(result.isSuccess());
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenPhoneNumberIsConnectedToAccountWithTextConsentSetToOptOut() {
+        string phoneNumber = '8495478569';
+        Account[] accts = createAccountsWithPhoneNumber(1, phoneNumber);
+        accts[0].Global_Text_Consent__c = 'Opt Out';
+        insert accts;
+
+        Test.startTest();
+
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', phoneNumber);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+
+        Database.DeleteResult result = Database.delete(accts[0], false);
+        System.assert(result.isSuccess());
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenPhoneNumberIsConnectedToAccountButNoOpportunity() {
+        string phoneNumber = '1234567890';
+        Account[] accts = createAccountsWithPhoneNumber(1, phoneNumber);
+        Insert accts;
+
+        Test.startTest();
+
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', phoneNumber);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+
+        Database.DeleteResult result = Database.delete(accts[0], false);
+        System.assert(result.isSuccess());
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenPhoneNumberIsConnectedToAccountButMoreThanOneOpportunity() {
+        string phoneNumber = '1234567890';
+        Account[] accts = createAccountsWithPhoneNumber(1, phoneNumber);
+        insert accts;
+
+        Opportunity[] opps = createOpportunitiesForAccount(2, accts);
+        insert opps;
+
+        Test.startTest();
+
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', phoneNumber);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+
+        Database.DeleteResult result = Database.delete(accts[0], false);
+        System.assert(result.isSuccess());
+    }
+
+    @isTest static void GetCallReturnsNoContentWhenPhoneNumberIsConnectedToAccountButNoAppointments() {
+        string phoneNumber = '1234567890';
+        Account[] accts = createAccountsWithPhoneNumber(1, phoneNumber);
+        insert accts;
+
+        Opportunity[] opps = createOpportunitiesForAccount(1, accts);
+        insert opps;
+
+        Test.startTest();
+
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', phoneNumber);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+
+        Database.DeleteResult result = Database.delete(accts[0], false);
+        System.assert(result.isSuccess());
+    }
+
+    @isTest static void GetCallReturnsContentWhenPhoneNumberIsConnectedToAccountWithAnAppointment() {
+        string phoneNumber = '1234567890';
+        Account[] accts = createAccountsWithPhoneNumber(1, phoneNumber);
+        insert accts;
+
+        Opportunity[] opps = createOpportunitiesForAccount(1, accts);
+        insert opps;
+
+        Lead lead = createLeadWithPhoneNumber(phoneNumber);
+        insert lead;
+
+        Event[] apps = createEventsForOpportunity(1, opps, 'Browse', null);
+        insert apps;
+
+        Test.startTest();
+
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', phoneNumber);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+
+        Database.DeleteResult result = Database.delete(accts[0], false);
+        System.assert(result.isSuccess());
+    }
+
+    @isTest static void GetCallReturnsContentWhenPhoneNumberIsConnectedToAccountWithMultipleAppointment() {
+        string phoneNumber = '1234567890';
+        Account[] accts = createAccountsWithPhoneNumber(1, phoneNumber);
+        insert accts;
+
+        Opportunity[] opps = createOpportunitiesForAccount(1, accts);
+        insert opps;
+
+        Lead lead = createLeadWithPhoneNumber(phoneNumber);
+        insert lead;
+
+        Event[] apps = createEventsForOpportunity(2, opps, 'Browse;Finance;Appraisal', null);
+        insert apps;
+
+        Test.startTest();
+
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.params.put('phone-number', phoneNumber);
+        req.httpMethod = 'GET';
+        req.addHeader('Content-Type', 'application/json');
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.getAppointmentForCheckIn();
+        system.assertEquals(204, res.statusCode);
+        Test.stopTest();
+
+        Database.DeleteResult result = Database.delete(accts[0], false);
+        System.assert(result.isSuccess());
+    }
+
+    @isTest static void customerWithOutAppointment() {
+        String payload = '{' +
+            '"item": {' +
+            '"customer": {' +
+            '"firstName": "Test5",' +
+            '"lastName": "Cincy",' +
+            '"email":"test5cincy@test.com",' +
+            '"phone":"5021234546"' +
+            '},' +
+            '"appointment": {' +
+            '"appointmentId": "",' +
+            '"appointmentType": "Browse;Appraisal",' +
+            '"description": "Trading in based on offer",' +
+            '"store": "8901"' +
+            '}' +
+            '}' +
+            '}';
+
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'POST';
+        req.addHeader('Content-Type', 'application/json');
+        req.requestBody = Blob.valueOf(payload);
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.checkInAppointment();
+        system.assertEquals(200, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void customerWithOutAppointmentWithoutItemNode() {
+        String payloadWithoutItemNode = '{' +
+            '"node": {' +
+            '"customer": {' +
+            '"firstName": "Test5",' +
+            '"lastName": "Cincy",' +
+            '"email":"test5cincy@test.com",' +
+            '"phone":"5021234546"' +
+            '},' +
+            '"appointment": {' +
+            '"appointmentId": "",' +
+            '"appointmentType": "Browse;Appraisal",' +
+            '"description": "Trading in based on offer",' +
+            '"store": "8901"' +
+            '}' +
+            '}' +
+            '}';
+
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'POST';
+        req.addHeader('Content-Type', 'application/json');
+        req.requestBody = Blob.valueOf(payloadWithoutItemNode);
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.checkInAppointment();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void customerWithOutAppointmentWithoutApptNode() {
+        String payloadWithoutItemNode = '{' +
+            '"item": {' +
+            '"customer": {' +
+            '"firstName": "Test5",' +
+            '"lastName": "Cincy",' +
+            '"email":"test5cincy@test.com",' +
+            '"phone":"5021234546"' +
+            '},' +
+            '"something": {' +
+            '"appointmentId": "",' +
+            '"appointmentType": "Browse;Appraisal",' +
+            '"description": "Trading in based on offer",' +
+            '"store": "8901"' +
+            '}' +
+            '}' +
+            '}';
+
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'POST';
+        req.addHeader('Content-Type', 'application/json');
+        req.requestBody = Blob.valueOf(payloadWithoutItemNode);
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.checkInAppointment();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void customerWithOutAppointmentWithoutCustomerNode() {
+        String payloadWithoutItemNode = '{' +
+            '"item": {' +
+            '"something": {' +
+            '"firstName": "Test5",' +
+            '"lastName": "Cincy",' +
+            '"email":"test5cincy@test.com",' +
+            '"phone":"5021234546"' +
+            '},' +
+            '"appointment": {' +
+            '"appointmentId": "",' +
+            '"appointmentType": "Browse;Appraisal",' +
+            '"description": "Trading in based on offer",' +
+            '"store": "8901"' +
+            '}' +
+            '}' +
+            '}';
+
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'POST';
+        req.addHeader('Content-Type', 'application/json');
+        req.requestBody = Blob.valueOf(payloadWithoutItemNode);
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.checkInAppointment();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void customerWithOutAppointmentWithoutFirstNameLastName() {
+        String payloadWithoutItemNode = '{' +
+            '"item": {' +
+            '"customer": {' +
+            '"firstName": "",' +
+            '"lastName": "",' +
+            '"email":"test5cincy@test.com",' +
+            '"phone":"5021234546"' +
+            '},' +
+            '"appointment": {' +
+            '"appointmentId": "",' +
+            '"appointmentType": "Browse;Appraisal",' +
+            '"description": "Trading in based on offer",' +
+            '"store": "8901"' +
+            '}' +
+            '}' +
+            '}';
+
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'POST';
+        req.addHeader('Content-Type', 'application/json');
+        req.requestBody = Blob.valueOf(payloadWithoutItemNode);
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.checkInAppointment();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void customerWithAppointment() {
+        Event appt = [select Id from Event where Location = '8901'
+            limit 1
+        ][0];
+        String payload = '{' +
+            '"item": {' +
+            '"appointment": {' +
+            '"appointmentId": "' + appt.Id + '",' +
+            '"appointmentType": "Browse;Appraisal;Financing;ICO Appraisal Appointment",' +
+            '"description": "Trading in based on offer",' +
+            '"store": "8901"' +
+            '}' +
+            '}' +
+            '}';
+
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'POST';
+        req.addHeader('Content-Type', 'application/json');
+        req.requestBody = Blob.valueOf(payload);
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.checkInAppointment();
+        system.assertEquals(200, res.statusCode);
+        Test.stopTest();
+    }
+
+    @isTest static void customerWithAppointmentWithInvalidApptId() {
+        String payload = '{' +
+            '"item": {' +
+            '"appointment": {' +
+            '"appointmentId": "ABCDEFGHIJKAL",' +
+            '"appointmentType": "Browse;Appraisal;Financing;ICO Appraisal Appointment",' +
+            '"description": "Trading in based on offer",' +
+            '"store": "8901"' +
+            '}' +
+            '}' +
+            '}';
+
+        Test.startTest();
+        RestRequest req = new RestRequest();
+        RestResponse res = new RestResponse();
+        req.requestURI = '/services/apexrest/appointment/check-in/';
+        req.httpMethod = 'POST';
+        req.addHeader('Content-Type', 'application/json');
+        req.requestBody = Blob.valueOf(payload);
+        RestContext.request = req;
+        RestContext.response = res;
+        ISX_AppointmentCheckInApi.checkInAppointment();
+        system.assertEquals(400, res.statusCode);
+        Test.stopTest();
+    }
+}
