@@ -3,43 +3,50 @@ global without sharing class ISX_AppointmentCheckInApi {
 
     static final String ERROR_UNHANDLED_EXCEPTION = 'An unhandled Apex exception occurred';
     
-    global class ResponseMsg {
-        public string workOrderStatus {get; set;}
-        public string stockNumber {get; set;}
-        public List<AppointmentForCheckIn> eventInfo {get; set;}
-    }
-    
     global class AppointmentForCheckIn {
-        public string appointmentId {get; set;}
-        public string appointmentType {get; set;}
-        public string workOrderStatus {get; set;}
-        public string stockNumber {get; set;}
-        public string storeId {get; set;}
-        public Datetime appointmentDatetime {get;set;}
-        public string crmId {get;set;}
-        public string ciid {get;set;}
-        public string ciamid {get;set;}
-        public string customerName {get;set;}
+        public Datetime appointmentDatetime {get; set;}
+        public String appointmentId {get; set;}
+        public String appointmentType {get; set;}
+        public String ciamid {get; set;}
+        public String ciid {get; set;}
+        public String crmId {get; set;}
+        public String customerName {get; set;}
+        public String stockNumber {get; set;}
+        public String storeId {get; set;}
+        public String workOrderStatus {get; set;}
     }
 
     /*
     /services/apexrest/check-in/?phone-number=2403393813
-    {
-    "appointmentId" : "00U2h0000036VkwEAE",
-    "appointmentType" : "0051C000009hjQRQAY"
-    }      
-    */
+    /*
+     * New Response Sample:
+    [
+        {
+            "appointmentId": "00U2h0000036VkwEAE",
+            "appointmentType": "0051C000009hjQRQAY",
+            "storeId": "test",
+            "appointmentDatetime": "test",
+            "crmId": "00U2h0000036VkwEAE",
+            "ciid": "00U2h0000036VkwEAE",
+            "ciamid": "00U2h0000036VkwEAE",
+            "customerName": "test",
+            "workOrderStatus": "test",
+            "stockNumber": "12345"
+        }
+    ]
+     */
+
     @HttpGet
-    global static void getAppointmentForCheckIn(){
+    global static void getAppointmentForCheckIn() {
         RestRequest req = RestContext.request;
         RestResponse res = RestContext.response;
         List<Account> retrievedAccounts;
         List<Event> retrievedEvents;
-        AppointmentForCheckIn retrievedReturndata;
-        ResponseMsg responseWrapper;
+        // AppointmentForCheckIn retrievedReturndata; //todo:
+        List<AppointmentForCheckIn> retrievedReturndata;
         
         Map<string, string> retrievedParameters = retrieveInputParameters(req);
-        system.debug(retrievedParameters);
+        System.debug('retrievedParameters : ' + retrievedParameters);
         if ((retrievedParameters == null) || (retrievedParameters.isEmpty())){
             res.responseBody = Blob.valueOf('Please provide an identifying data point.');
             res.statusCode = 400;
@@ -55,11 +62,7 @@ global without sharing class ISX_AppointmentCheckInApi {
                     res.statusCode = 400;
                     return;
                 }
-                retrievedReturndata = prepareAppointmentResponse(retrievedEvents[0]);
-                responseWrapper =new ResponseMsg();
-                responseWrapper.workOrderStatus = 'test';
-                responseWrapper.stockNumber= '1234';
-                responseWrapper.eventInfo= new List<AppointmentForCheckIn>{retrievedReturndata};
+                retrievedReturndata = prepareAppointmentResponse(retrievedEvents);        
                 res.responseBody = Blob.valueOf(JSON.serialize(retrievedReturndata));
                 res.statusCode = 200;
                 return;
@@ -82,6 +85,7 @@ global without sharing class ISX_AppointmentCheckInApi {
                 return;
             }
             
+            // todo: Question: What if we get different set of accounts when queried from phone?
             List<Opportunity> retrievedOpportunities = retrieveOpportunities(retrievedAccounts);
 
             if (!processData(retrievedOpportunities, retrievedParameters, retrievedEvents, retrievedReturndata, res)) {
@@ -107,60 +111,41 @@ global without sharing class ISX_AppointmentCheckInApi {
         List<Opportunity> retrievedOpportunities,
         Map<string, string> retrievedParameters,
         List<Event> retrievedEvents,
-        AppointmentForCheckIn retrievedReturndata,
+        List<AppointmentForCheckIn> retrievedReturndata,
         RestResponse res
     ) {
-    if (ISX_FilterUtil.isNullOrEmpty(retrievedOpportunities)) {
-        List<Lead> retrievedLeads = retrieveLeadsViaPhone(retrievedParameters.get('phone-number'));
-        if (ISX_FilterUtil.isNullOrEmpty(retrievedLeads)) {
-            res.responseBody = Blob.valueOf('No opportunities/leads with the provided data points.');
-            res.statusCode = 204;
-            return false;
-        }
-        else {
-            retrievedEvents = retrieveNonConLeadEvents(retrievedLeads);
-            if (ISX_FilterUtil.isNullOrEmpty(retrievedEvents)) {
-                res.responseBody = Blob.valueOf('No appointments associated with the provided data points.');
+        if (ISX_FilterUtil.isNullOrEmpty(retrievedOpportunities)) {
+            List<Lead> retrievedLeads = retrieveLeadsViaPhone(retrievedParameters.get('phone-number'));
+            if (ISX_FilterUtil.isNullOrEmpty(retrievedLeads)) {
+                res.responseBody = Blob.valueOf('No opportunities/leads with the provided data points.');
                 res.statusCode = 204;
                 return false;
             }
-
-            retrievedReturndata = prepareAppointmentResponse(retrievedEvents[0]);  
-            
-            ResponseMsg responseWrapper =new ResponseMsg();
-            responseWrapper.workOrderStatus = 'test';
-            responseWrapper.stockNumber= '1234';
-            responseWrapper.eventInfo= new List<AppointmentForCheckIn>{retrievedReturndata};
-                   
-            res.responseBody = Blob.valueOf(JSON.serialize(responseWrapper));
-            res.statusCode = 200;
+            else {
+                retrievedEvents = retrieveNonConLeadEvents(retrievedLeads);
+                if (ISX_FilterUtil.isNullOrEmpty(retrievedEvents)) {
+                    res.responseBody = Blob.valueOf('No appointments associated with the provided data points.');
+                    res.statusCode = 204;
+                    return false;
+                }
+                retrievedReturndata = prepareAppointmentResponse(retrievedEvents);         
+                res.responseBody = Blob.valueOf(JSON.serialize(retrievedReturndata));
+                res.statusCode = 200;
+                return false;
+            }
+        }
+        
+        retrievedEvents = retrieveEvents(retrievedOpportunities);
+        if (ISX_FilterUtil.isNullOrEmpty(retrievedEvents)) {
+            res.responseBody = Blob.valueOf('No appointments associated with the provided data points.');
+            res.statusCode = 204;
             return false;
         }
-    }
-    else if (retrievedOpportunities.Size() >= 2) {
-        res.responseBody = Blob.valueOf('Data points are associated with multiple opportunities.');
-        res.statusCode = 204;
+        
+        retrievedReturndata = prepareAppointmentResponse(retrievedEvents);        
+        res.responseBody = Blob.valueOf(JSON.serialize(retrievedReturndata));
+        res.statusCode = 200;
         return false;
-    }
-    
-    retrievedEvents = retrieveEvents(retrievedOpportunities);
-    if (retrievedEvents == null || retrievedEvents.isEmpty()){
-        res.responseBody = Blob.valueOf('No appointments associated with the provided data points.');
-        res.statusCode = 204;
-        return false;
-    }
-    
-    retrievedReturndata = prepareAppointmentResponse(retrievedEvents[0]); 
-    
-    ResponseMsg responseWrapper =new ResponseMsg();
-    responseWrapper.workOrderStatus = 'test';
-    responseWrapper.stockNumber= '1234';
-    responseWrapper.eventInfo= new List<AppointmentForCheckIn>{retrievedReturndata};
-           
-    res.responseBody = Blob.valueOf(JSON.serialize(responseWrapper));
-    res.statusCode = 200;
-    return false;
-    
     }
 
     /**
@@ -169,7 +154,7 @@ global without sharing class ISX_AppointmentCheckInApi {
      * @param res Response
      * @return True if valid
      */
-    private static boolean validatedAccounts(List<Account> retrievedAccounts,  RestResponse res){
+    private static boolean validatedAccounts(List<Account> retrievedAccounts,  RestResponse res){  //done
 
         if (ISX_FilterUtil.isNullOrEmpty(retrievedAccounts)) {
             res.responseBody = Blob.valueOf('No Accounts associated with the provided data points.');
@@ -209,10 +194,17 @@ global without sharing class ISX_AppointmentCheckInApi {
         return pm.matches();
     }
 
-    private static List<Lead> retrieveLeadsViaPhone( string phoneNumber){
-        string cleanedPhoneNumber = phoneNumber.replaceAll('[^0-9]','');
-        string phoneNumberWithParenthesis = '(' + cleanedPhoneNumber.substring(0,3) + ') ' + cleanedPhoneNumber.substring(3, 6) + '-' + cleanedPhoneNumber.substring(6);
-        return [SELECT Id from Lead WHERE (Phone=:phoneNumberWithParenthesis or Phone=:cleanedPhoneNumber) and isConverted=false];
+    /**
+     * Gets Lead by phone
+     * @param phoneNumber Phone Number
+     * @return List of Leads
+     */
+    private static List<Lead> retrieveLeadsViaPhone(String phoneNumber) {
+        String cleanedPhoneNumber = phoneNumber.replaceAll('[^0-9]','');
+        String phoneNumberWithParenthesis = 
+            '(' + cleanedPhoneNumber.substring(0,3)+ ') ' 
+            + cleanedPhoneNumber.substring(3, 6) + '-' + cleanedPhoneNumber.substring(6);
+        return ISX_SObjectSelector.getLeadsByPhone(cleanedPhoneNumber, phoneNumberWithParenthesis);
     }
 
     /**
@@ -220,26 +212,28 @@ global without sharing class ISX_AppointmentCheckInApi {
      * @param phoneNumber Phone Number to match
      * @return List of Accounts
      */
-    private static List<Account> retrieveAccountsViaPhone( string phoneNumber){
+    private static List<Account> retrieveAccountsViaPhone( string phoneNumber) { //done
         string cleanedPhoneNumber = phoneNumber.replaceAll('[^0-9]','');
-        string phoneNumberWithParenthesis = '(' + cleanedPhoneNumber.substring(0,3) + ') ' + cleanedPhoneNumber.substring(3, 6) + '-' + cleanedPhoneNumber.substring(6);
+        string phoneNumberWithParenthesis = 
+            '(' + cleanedPhoneNumber.substring(0,3) + ') '
+            + cleanedPhoneNumber.substring(3, 6) + '-' + cleanedPhoneNumber.substring(6);
         
-        List<Account> accounts = [SELECT Id, Name, Global_Text_Consent__c, My_KMX_Id__c FROM Account WHERE Phone = :cleanedPhoneNumber];
+        List<Account> accounts = ISX_SObjectSelector.getAccountsByHomeOrMobilPhone(cleanedPhoneNumber);
         if (!ISX_FilterUtil.isNullOrEmpty(accounts)) {
             return accounts;
         }
         
-        accounts = [SELECT Id, Name, Global_Text_Consent__c, My_KMX_Id__c FROM Account WHERE Phone = :phoneNumberWithParenthesis];
+        accounts = ISX_SObjectSelector.getAccountsByHomeOrMobilPhone(phoneNumberWithParenthesis);
         if (!ISX_FilterUtil.isNullOrEmpty(accounts)) {
             return accounts;
         }
         
-        accounts = [SELECT Id, Name, Global_Text_Consent__c, My_KMX_Id__c FROM Account WHERE Phone = :cleanedPhoneNumber];
+        accounts = ISX_SObjectSelector.getAccountsByHomeOrMobilPhone(cleanedPhoneNumber);
         if (!ISX_FilterUtil.isNullOrEmpty(accounts)) {
             return accounts;
         }
         
-        accounts = [SELECT Id, Name, Global_Text_Consent__c, My_KMX_Id__c FROM Account WHERE Phone = :phoneNumberWithParenthesis];
+        accounts = ISX_SObjectSelector.getAccountsByHomeOrMobilPhone(phoneNumberWithParenthesis);
         if (!ISX_FilterUtil.isNullOrEmpty(accounts)) {
             return accounts;
         }
@@ -271,14 +265,12 @@ global without sharing class ISX_AppointmentCheckInApi {
         }
 
         if (crmId) {
-            List<Account> accounts = 
-                [SELECT Id, Name, Global_Text_Consent__c, My_KMX_Id__c FROM Account WHERE Id = :rpCopy];
+            List<Account> accounts = ISX_SObjectSelector.getAccountsById(new Set<Id>{ rpCopy });
             if (!ISX_FilterUtil.isNullOrEmpty(accounts)) {
                 return accounts;
             }
         } else if (kmxId) {
-            List<Account> accounts =
-                [SELECT Id, Name, Global_Text_Consent__c, My_KMX_Id__c FROM Account WHERE My_KMX_Id__c = :rpCopy];
+            List<Account> accounts = ISX_SObjectSelector.getAccountsByKmxId(rpCopy);
             if (!ISX_FilterUtil.isNullOrEmpty(accounts)) {
                 return accounts;
             }
@@ -292,10 +284,11 @@ global without sharing class ISX_AppointmentCheckInApi {
      * @param retrievedAccounts Queried Accounts
      * @return List of Opportunities
      */
-    private static List<Opportunity> retrieveOpportunities(List<Account> retrievedAccounts){
-        string accountId = retrievedAccounts[0].id;
+    private static List<Opportunity> retrieveOpportunities(List<Account> retrievedAccounts) { //done
         List<Opportunity> opportunities = 
-            ISX_SObjectSelector.getOppsByAccountStatus(accountId, new List<String>{ ISX_Cons.STATUS_ACTIVE });
+            ISX_SObjectSelector.getOppsByAccountIdAndStatus(
+                new Map<Id, Account>(retrievedAccounts).keySet(), new List<String>{ ISX_Cons.STATUS_ACTIVE }
+            );
         return opportunities;
     }
 
@@ -305,15 +298,25 @@ global without sharing class ISX_AppointmentCheckInApi {
      * @return list of Events
      */
     private static List<Event> retrieveEvents(List<Opportunity> retrievedOpportunities) {
-        string whatId = retrievedOpportunities[0].id;
+        Set<Id> setOppIds = new Map<Id, Opportunity>(retrievedOpportunities).keySet();
         List<String> lstApptStatus = new List<String> { ISX_Cons.APPT_STATUS_OPEN, ISX_Cons.APPT_STATUS_RESCHEDULED };
-        return ISX_SObjectSelector.getEventByIdAppointmentStatus(whatId, lstApptStatus);
+        return ISX_SObjectSelector.getEventsByWhatIdAppointmentStatus(setOppIds, lstApptStatus);
     }
 
-    private static List<Event> retrieveNonConLeadEvents(List<Lead> retrievedLeads){
-        string whatId = retrievedLeads[0].id;
-        List<Event> events = [SELECT Id, Appointment_Type__c, Lead_Type__c, StartDateTime, Location FROM Event WHERE WhoId = :whatId AND (Appointment_Status__c = 'Open' Or Appointment_Status__C = 'Rescheduled') AND StartDateTime = TODAY ORDER BY LastModifiedDate DESC];
-        return events;
+    /**
+     * Gets Events from Non converted Leads
+     * @param retrievedLeads 
+     * @return list of Events
+     */
+    private static List<Event> retrieveNonConLeadEvents(List<Lead> retrievedLeads) {
+        if (ISX_FilterUtil.isNullOrEmpty(retrievedLeads)) {
+            return new List<Event>();
+        }
+        
+        Set<Id> setLeadId = new Map<Id, Lead>(retrievedLeads).keySet();
+        List<String> lstApptStatus = new List<String> { ISX_Cons.APPT_STATUS_OPEN, ISX_Cons.APPT_STATUS_RESCHEDULED };
+
+        return ISX_SObjectSelector.getEventsByWhoIdAppointmentStatus(setLeadId, lstApptStatus);
     }
 
     /**
@@ -327,89 +330,149 @@ global without sharing class ISX_AppointmentCheckInApi {
     }
     
     /**
-     * Prepares appointment response
+     * Gets returnAppointmentType response attribute
      * @param retrievedEvent Event record
-     * @return AppointmentForCheckIn wrapper
+     * @return returnAppointmentType attribute
      */
-    private static AppointmentForCheckIn prepareAppointmentResponse(Event retrievedEvent){
-        string returnAppointmentType = '';
+    private static String getReturnAppointmentType(Event retrievedEvent) {
         String appointmentType = '';
+        String returnAppointmentType = '';
 
-        if(string.isNotBlank(retrievedEvent.Appointment_Type__c)){
+        if (string.isNotBlank(retrievedEvent.Appointment_Type__c)) {
             appointmentType = retrievedEvent.Appointment_Type__c;
         }
-        else if (string.isNotBlank(retrievedEvent.Lead_Type__c)){
+        else if (string.isNotBlank(retrievedEvent.Lead_Type__c)) {
             appointmentType = retrievedEvent.Lead_Type__c;
         }
 
-        if (string.isNotBlank(appointmentType)){
-            returnAppointmentType = constructAppointmentTypesString(appointmentType);
+        if (string.isBlank(appointmentType)) {
+            return '';
         }
 
-        AppointmentForCheckIn returnData = new AppointmentForCheckIn();   
-        returnData.appointmentId = retrievedEvent.id;
-        returnData.appointmentType = returnAppointmentType;
-        returnData.appointmentDatetime = retrievedEvent.StartDateTime;
-        returnData.storeId = retrievedEvent.Location;
-        returnData.crmId = retrievedEvent.AccountId;
-        returnData.customerName = retrievedEvent.Account.Name;
-        returnData.ciamid = retrievedEvent.Account.My_KMX_Id__c;
-        returnData.ciid = retrievedEvent.WhatId;
-
-        return retieveStockNumberAndWOStatus(retrievedEvent, returnData);
+        return constructAppointmentTypesString(appointmentType);
     }
 
+    /**
+     * Prepares appointment response
+     * @param retrievedEvents List of Event records
+     * @return list of AppointmentForCheckIn wrapper
+     */
+    private static List<AppointmentForCheckIn> prepareAppointmentResponse(List<Event> retrievedEvents) {
+        return buildAndRetrieveResponse(retrievedEvents);
+    }
+
+    /**
+     * Helper method to construct Appotinment Type
+     * @param appointmentType Appotinment Type
+     * @return Formatted Appotinment Type
+     */
     private static String constructAppointmentTypesString(String appointmentType){
         string returnAppointmentType = '';
-        if (appointmentType.containsIgnoreCase('Browse') || appointmentType.containsIgnoreCase('Test Drive') || appointmentType.containsIgnoreCase('TestDrive') 
-        || appointmentType.containsIgnoreCase('Hold') || appointmentType.containsIgnoreCase('Appointment Reservation') || appointmentType.containsIgnoreCase('Buy')){
+        if (appointmentType.containsIgnoreCase('Browse') || appointmentType.containsIgnoreCase('Test Drive')
+            || appointmentType.containsIgnoreCase('TestDrive') 
+            || appointmentType.containsIgnoreCase('Hold')
+            || appointmentType.containsIgnoreCase('Appointment Reservation')
+            || appointmentType.containsIgnoreCase('Buy')
+        ) {
             returnAppointmentType = shouldAddSemiColon(returnAppointmentType) + 'Browse';
         }
 
-        if (appointmentType.containsIgnoreCase('Finance') || appointmentType.containsIgnoreCase('Financing') || appointmentType.containsIgnoreCase('Financing Info')){
+        if (appointmentType.containsIgnoreCase('Finance') || appointmentType.containsIgnoreCase('Financing')
+            || appointmentType.containsIgnoreCase('Financing Info')
+        ) {
             returnAppointmentType = shouldAddSemiColon(returnAppointmentType) + 'Financing';
         }
 
-        if (appointmentType.containsIgnoreCase('Appraisal') && !appointmentType.containsIgnoreCase('ICO Appraisal Appointment')){
+        if (appointmentType.containsIgnoreCase('Appraisal')
+            && !appointmentType.containsIgnoreCase('ICO Appraisal Appointment')
+        ) {
             returnAppointmentType = shouldAddSemiColon(returnAppointmentType) + 'Appraisal';
         }
 
-        if (appointmentType.containsIgnoreCase('ICO Appraisal Appointment')){
+        if (appointmentType.containsIgnoreCase('ICO Appraisal Appointment')) {
             returnAppointmentType = shouldAddSemiColon(returnAppointmentType) + 'ICO Appraisal Appointment';
         }
 
-        if (appointmentType.containsIgnoreCase('Express Pick Up')){
+        if (appointmentType.containsIgnoreCase('Express Pick Up')) {
             returnAppointmentType = shouldAddSemiColon(returnAppointmentType) + 'Express Pickup';
         }
         return returnAppointmentType;
     }
-    
-    private static AppointmentForCheckIn retieveStockNumberAndWOStatus(Event retrievedEvent, AppointmentForCheckIn returnData){
-        String workOrderStatus = '';
-        String stockNumber = '';
-        //retrieve workorderstatus and stocknumber
-        /*List<serviceAppointment> lstSA;
-        lstSA = [select Id, ParentRecordId, RecordType.DeveloperName, ParentRecordType, ServiceTerritory.Name, Assigned_Store__c from ServiceAppointment where AppointmentId__c =: retrievedEvent.id and AppointmentId__c != null];
-        if(lstSA.size() == 0){
-            //get ci using appt id
-            List<Event> lstEvnt = [select Id, WhatId from event where id=:retrievedEvent.id];
-            String ciId;
-            if(lstEvnt.size() > 0){
-                ciId = lstEvnt[0].WhatId;
+
+    /**
+     * Bilds and retrieves response
+     * @param retrievedEvents List of Events
+     * @return List of AppointmentForCheckIn 
+     */
+    private static List<AppointmentForCheckIn> buildAndRetrieveResponse(List<Event> retrievedEvents) {
+        Set<Id> setParentRecordId = new Set<Id>();
+        Set<Id> setEventWhatId = new Set<Id>();
+        List<AppointmentForCheckIn> lstAppointmentForCheckIn = new List<AppointmentForCheckIn>();
+        Map<Id, Event> mapEvents = new Map<Id, Event>(retrievedEvents);
+        Map<Id, ServiceAppointment> mapEventIdWhatIdSerAppt = new Map<Id, ServiceAppointment>();
+        Map<Id, Id> mapEventIdWhatIdSerApptParentId = new Map<Id, Id>();
+
+        setEventWhatId = ISX_FilterUtil.getIdFieldValues(retrievedEvents, 'WhatId');
+        List<ServiceAppointment> lstSericeAppointments = 
+            ISX_SObjectSelector.getServiceAppointmentsForCheckInApi(mapEvents.keySet(), setEventWhatId);
+
+        for (ServiceAppointment appointment : lstSericeAppointments) {
+            Boolean isValid = 
+                appointment.ParentRecordId != null
+                && ISX_Cons.REC_TYPE_DEV_NAME_FIELD_SERVICE.equalsIgnoreCase(appointment.RecordType.DeveloperName)
+                && ISX_Cons.PARENTRECORDTYPE_WORKORDERLINEITEM.equalsIgnoreCase(appointment.ParentRecordType);
+            if (isValid) {
+                setParentRecordId.add(appointment.ParentRecordId);
+                if (mapEvents.containsKey(appointment.AppointmentId__c)) {
+                    mapEventIdWhatIdSerApptParentId.put(appointment.AppointmentId__c, appointment.ParentRecordId);
+
+                } else if (setEventWhatId.contains(appointment.Customer_Interaction__c)) {
+                    mapEventIdWhatIdSerApptParentId.put(appointment.Customer_Interaction__c, appointment.ParentRecordId);
+                }
             }
-            //get sa using ci id
-            if(String.isNotBlank(ciId)){
-                lstSA = [select Id, ParentRecordId, RecordType.DeveloperName, ParentRecordType, ServiceTerritory.Name, Assigned_Store__c from ServiceAppointment where Customer_Interaction__c=:ciId and RecordType.DeveloperName != 'PI_Service_Appointment'];
-            } 
         }
-        if(lstSA.size() > 0 && lstSA[0].ParentRecordType == 'WorkOrderLineItem' && String.isNotBlank(lstSA[0].ParentRecordId) && lstSA[0].RecordType.DeveloperName == 'Field_Service'){
-            workorderlineitem lineitem = [select WorkOrder.Status, WorkOrder.WO_Vehicle_Stock_Number__c from workorderlineitem where Id = :lstSA[0].ParentRecordId];
-            workOrderStatus = (lineitem.WorkOrder.Status != null) ? lineitem.WorkOrder.Status : '';
-            stockNumber = (lineitem.WorkOrder.WO_Vehicle_Stock_Number__c != null) ? lineitem.WorkOrder.WO_Vehicle_Stock_Number__c : '';
+
+        // todo: Question to Chris:
+        // For Appoitments with one Opportunity, there are multiple Service Appointmens/Work Orders associated. How do find out which Work Order is associated with the appointment?
+
+        List<WorkOrderLineItem> lstWorkOrderLineItems = ISX_SObjectSelector.getWorkOrderLineItemById(setParentRecordId);
+        Map<Id, WorkOrderLineItem> mapWorkOrderLineItem = new Map<Id, WorkOrderLineItem>(lstWorkOrderLineItems);
+		Map<Id,Id> mapCustomerInteractionLineItem=new Map<Id,Id>();
+		
+		for(WorkOrderLineItem wItem:lstWorkOrderLineItems){
+			if(!mapCustomerInteractionLineItem.containsKey(wItem.WorkOrder.Customer_Interaction__c)){
+				mapCustomerInteractionLineItem.put(wItem.WorkOrder.Customer_Interaction__c,wItem.Id);
+			}
+		}
+
+        for (Event retrievedEvent : retrievedEvents) {
+            Id serApptParentRecordId;
+            Id eventId = retrievedEvent.Id;
+            Id whatId = retrievedEvent.WhatId;
+            AppointmentForCheckIn appointmentDetail = new AppointmentForCheckIn();
+            appointmentDetail.appointmentDatetime = retrievedEvent.StartDateTime;
+            appointmentDetail.appointmentId = retrievedEvent.Id;
+            appointmentDetail.appointmentType = getReturnAppointmentType(retrievedEvent);
+            appointmentDetail.ciamid = retrievedEvent.Account.My_KMX_Id__c;
+            appointmentDetail.ciid = retrievedEvent.WhatId;
+            appointmentDetail.crmId = retrievedEvent.AccountId;
+            appointmentDetail.customerName = retrievedEvent.Account.Name;
+            appointmentDetail.storeId = retrievedEvent.Location;
+
+            if (mapEventIdWhatIdSerApptParentId.containsKey(eventId)) {
+                serApptParentRecordId = mapEventIdWhatIdSerApptParentId.get(eventId);
+            } else if (mapEventIdWhatIdSerApptParentId.containsKey(whatId) && mapCustomerInteractionLineItem.containsKey(whatId)) {
+                serApptParentRecordId = mapCustomerInteractionLineItem.get(whatId);
+            }
+            if (serApptParentRecordId != null && !ISX_FilterUtil.isNullOrEmpty(mapWorkOrderLineItem)) {
+                appointmentDetail.workOrderStatus = mapWorkOrderLineItem.get(serApptParentRecordId)?.WorkOrder?.Status;
+                appointmentDetail.stockNumber = 
+                    mapWorkOrderLineItem.get(serApptParentRecordId)?.WorkOrder?.WO_Vehicle_Stock_Number__c;
+            }
+            lstAppointmentForCheckIn.add(appointmentDetail);
         }
-        returnData.workOrderStatus = workOrderStatus; 
-        returnData.stockNumber = stockNumber; */
-        return returnData;
+
+        return lstAppointmentForCheckIn;
     }
 
     private static string shouldAddSemiColon(string providedString){
@@ -566,7 +629,6 @@ global without sharing class ISX_AppointmentCheckInApi {
         }
     }
     
-    /*
     CRM_WalkInCustomer__c walkinObj = new CRM_WalkInCustomer__c(
             Active__c = (appointmentType == 'ICO Appraisal Appointment' && storeType == 'Traditional')? false : true,
             Check_In_Method__c = 'Self',
@@ -579,7 +641,7 @@ global without sharing class ISX_AppointmentCheckInApi {
             Is_Walk_In__c = true,
             Email__c = (String)mapCustomerElements.get('email') 
         );
-    insert walkinObj;*/
+    insert walkinObj;
 
     return CheckInStatusMessage.CHECKIN_SUCCESSFUL;
     
@@ -611,10 +673,10 @@ global without sharing class ISX_AppointmentCheckInApi {
         return CheckInStatusMessage.INVALID_APPOINTMENT_ID;
     } 
     
-    //CRM_Point_CheckIn_Appointments.updateAppt(lstEvent[0].OwnerId, requestAppointmentId, isRemove, isWaiting, filter);
+    CRM_Point_CheckIn_Appointments.updateAppt(lstEvent[0].OwnerId, requestAppointmentId, isRemove, isWaiting, filter);
     
     //Update the CRM_WalkInCustomer__c record
-    /*List<CRM_WalkInCustomer__c> customerRec = [SELECT Id,Appointment_Id__c FROM CRM_WalkInCustomer__c WHERE Appointment_Id__c = :requestAppointmentId];
+    List<CRM_WalkInCustomer__c> customerRec = [SELECT Id,Appointment_Id__c FROM CRM_WalkInCustomer__c WHERE Appointment_Id__c = :requestAppointmentId];
     if(customerRec.size() > 0){
         customerRec[0].Active__c = ((requestAppointmentType == 'ICO Appraisal Appointment' || requestAppointmentType == 'Express Pickup') && storeType == 'Traditional')? false : true;
         customerRec[0].Check_In_Method__c = 'Self';
@@ -625,7 +687,7 @@ global without sharing class ISX_AppointmentCheckInApi {
         if(String.isNotBlank(requestAppointmentType))
             customerRec[0].Store_Visit_Purpose__c  = requestAppointmentType; 
         update customerRec;
-    } */
+    } 
 
     //Appointment's related Opportunity fields for Shopping, Selling and Financing status are updated to reflect the request
     updateOppWithRequest(lstEvent, requestAppointmentType);
@@ -635,7 +697,7 @@ global without sharing class ISX_AppointmentCheckInApi {
     
     private static void updateOppWithRequest(List<Event> lstEvent, String requestAppointmentType){
         
-        List<Opportunity> opportunityRec = [SELECT Id,CEC_Selling_Status__c , CEC_Shopping_Status__c, CEC_Financing_Status__c FROM Opportunity WHERE Id = :lstEvent[0].WhatId LIMIT 1]; //
+        List<Opportunity> opportunityRec = [SELECT Id,CEC_Selling_Status__c , CEC_Shopping_Status__c, CEC_Financing_Status__c FROM Opportunity WHERE Id = :lstEvent[0].WhatId LIMIT 1];
     if(opportunityRec.size() > 0 && String.isNotBlank(requestAppointmentType)){  
         // Shopping Status Updates when Appointment Type is 'Browse'  
         oppShoppingStatusUpdates1(requestAppointmentType, opportunityRec);    
