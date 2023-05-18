@@ -1,0 +1,24 @@
+<aura:component implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome" access="global">
+    
+    <aura:attribute name="selectedvalue" type="String"/>
+    <aura:attribute name="picklistvalues" type="List"/>
+    
+    <aura:handler name="init" value="{!this}" action="{!c.doInit}" />
+    
+    <lightning:progressIndicator currentStep="{!v.selectedvalue}" type="base" hasError="false" variant="base">
+        <aura:iteration items="{!v.picklistvalues}" var="item">
+            <lightning:progressStep label="{!item}" value="{!item}"/>
+        </aura:iteration>
+    </lightning:progressIndicator>
+    
+</aura:component>
+
+Progressbarcontroller:
+({
+	doInit : function(component, event, helper) {
+		var selectedvalue='Mahesh';
+        var picklistvalues=['Sachin','RAMESH','Sehwag','SURESH','Mahesh'];
+        component.set("v.selectedvalue",selectedvalue);
+        component.set("v.picklistvalues",picklistvalues);
+	}
+})
