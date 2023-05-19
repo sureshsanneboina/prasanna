@@ -16,9 +16,9 @@
 Progressbarcontroller:
 ({
 	doInit : function(component, event, helper) {
-		var selectedvalue='Mahesh';
+		/*var selectedvalue='Mahesh';
         var picklistvalues=['Sachin','RAMESH','Sehwag','SURESH','Mahesh'];
         component.set("v.selectedvalue",selectedvalue);
-        component.set("v.picklistvalues",picklistvalues);
+        component.set("v.picklistvalues",picklistvalues);*/
 	}
 })
