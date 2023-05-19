@@ -1,0 +1,53 @@
+<aura:component>
+
+    <aura:attribute name="currentUserDetails" type="User"/>
+    <aura:attribute name="addCustomerOpen" type="Boolean" default="false" />
+    <aura:attribute name="dragging" type="Boolean" default="false"/>
+    <aura:attribute name="viewAppraisal" type="Boolean" default="false"/>
+	<aura:attribute name="picklistvalues" type="List" default="['Email Sent','Customer Arrived','Customer Started']"/>
+
+    <lightning:layout multipleRows="true">
+
+        <lightning:layoutItem size="12">
+
+            <lightning:tabset variant="scoped">
+
+				<lightning:tab iconName="standard:event" label="Appointments">
+					<c:CRM_Point_CheckIn_Appointments CurrentUserDetails = "{!v.currentUserDetails}" dragging="{!v.dragging}" displayProgressBar="true" picklistvalues="{!v.picklistvalues}"/>
+				</lightning:tab>
+
+                <aura:if isTrue="{!v.viewAppraisal}">
+                    <lightning:tab iconName="standard:event" label="Appraisal Only">
+                        <c:CRM_Point_CheckIn_Appointments CurrentUserDetails = "{!v.currentUserDetails}" filter="appraisal" dragging="{!v.dragging}"/>
+                    </lightning:tab>
+                </aura:if>
+
+                <lightning:tab iconName="utility:signpost" label="Assigned/No Show">
+                    <c:CRM_Point_CheckIn_PastAppointments CurrentUserDetails = "{!v.currentUserDetails}" dragging="{!v.dragging}"/>
+                </lightning:tab>
+
+            </lightning:tabset>
+
+        </lightning:layoutItem>
+		
+        <lightning:layoutItem size="12" class="slds-p-top_small">
+
+            <lightning:tabset variant="scoped">
+
+				<lightning:tab iconName="utility:checkin" label="Checked - In">
+		            <c:CRM_Point_CheckIn_CheckedIn addCustomerOpen="{!v.addCustomerOpen}" dragging="{!v.dragging}" displayProgressBar="true" picklistvalues="{!v.picklistvalues}"/>
+				</lightning:tab>
+
+                <aura:if isTrue="{!v.viewAppraisal}">
+                    <lightning:tab iconName="utility:checkin" label="Appraisal Only">
+			            <c:CRM_Point_CheckIn_CheckedIn addCustomerOpen="{!v.addCustomerOpen}" filter="appraisal" dragging="{!v.dragging}"/>
+                    </lightning:tab>
+                </aura:if>
+
+            </lightning:tabset>
+
+        </lightning:layoutItem>
+
+    </lightning:layout>
+
+</aura:component>

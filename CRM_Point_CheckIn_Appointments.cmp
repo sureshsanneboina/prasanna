@@ -1,0 +1,185 @@
+<aura:component controller="CRM_Point_CheckIn_Appointments" access="global">
+
+	<aura:registerEvent name="CRMPointAppointmentRefreshEvent" type="c:CRMPointAppointmentRefreshEvent"/>
+
+    <aura:attribute name="CurrentUserDetails" type="User"/>
+    <aura:attribute name="popUpBottom" type="String" />
+    <aura:attribute name="data" type="Object"/>
+    <aura:attribute name="aggData" type="Object"/>
+    <aura:attribute name="columns" type="Object"/>
+    <aura:attribute name="filter" type="String" default="all"/>
+    <aura:attribute name="reloading" type="Boolean" default="false"/>
+    <aura:attribute name="editAssigned" type="Boolean" default="false"/>
+    <aura:attribute name="dragging" type="Boolean" default="false"/>
+    <aura:attribute name="selectedCustData" type="Object"/>
+    <aura:attribute name="moreToLoad" type="Boolean" default="false"/>
+	<aura:attribute name="totalRecords" type="Integer" default="0"/>
+	<aura:attribute name="glanceableViewEnabled" type="Boolean" default="false"/>
+    <aura:attribute name="picklistvalues" type="List"/>
+	<aura:attribute name="displayProgressBar" type="Boolean" default="false"/>
+    
+	
+
+    <aura:handler name="init" value="{!this}" action="{!c.init}"/>
+    <aura:handler event="c:CRMPointAppointmentRefreshEvent" action="{!c.handleRefreshEvent}"/>
+
+    <lightning:notificationsLibrary aura:id="notifLib"/>
+    <lightning:overlayLibrary aura:id="overlayLib"/>
+
+    <lightning:card>
+        <table class="slds-table slds-table_striped">
+            <thead>
+                <tr class="slds-text-title_caps">
+                	<aura:iteration items="{!v.columns}"  var="column" indexVar="columnIndex">
+                        <th class="{!'crm_col'+columnIndex}">
+                            <div class="{!'slds-truncate crm_col'+columnIndex}" title="{!column.label}">
+                            	<aura:if isTrue="{!column.labelVisible=='true'}">
+                            		{!column.label}
+                            	</aura:if>
+                            </div>
+                        </th>
+                	</aura:iteration>
+                </tr>
+            </thead>
+            <aura:if isTrue="{!v.reloading}">
+            	<lightning:spinner alternativeText="Loading" size="small" />
+            </aura:if>
+	        <tbody >
+	            <aura:iteration items="{!v.data}"  var="apptData" indexVar="dataIndex" >
+	                <tr class="slds-hint-parent">
+	                    <td class="slds-truncate slds-text-align_center crm_col0">
+	                    	<div id="{!'appointmentTime'+dataIndex}" data-value="{!apptData.apptId}">
+	                    		<lightning:formattedDateTime value="{!apptData.apptStartTime}" hour="2-digit" minute="2-digit" />
+	                    	</div>
+	                    </td>
+	                    <section aura:id="custInfoPop" class="slds-popover slds-nubbin_bottom-left slds-hide" role="dialog" aria-label="Dialog Title" aria-describedby="dialog-body-id-2">
+                            <div class="slds-popover__body" id="dialog-body-id-2">
+                                <aura:if isTrue="{!not(apptData.customerPhoneNum==null)}">
+                                    <p>
+                                        <lightning:formattedText value="Phone: " />
+                                        <br/>
+                                        {!apptData.customerPhoneNum}
+                                    </p>
+                                    <br/>
+                                </aura:if>
+                                <aura:if isTrue="{!not(apptData.customerInfo==null)}">
+                                    <p>
+                                        <lightning:formattedText value="Situation Notes: " />
+                                        <br/>
+                                        {!apptData.customerInfo}
+                                    </p>
+                                </aura:if>
+                            </div>
+						</section>
+						<td>
+                        <lightning:layout class="crm_fauxSldsTd crm_col1">
+							
+								<lightning:layoutItem class="crm_pointNameTd" >
+									<td class="crm_pointTdText crm_textCol1">
+										<aura:if isTrue="{!apptData.isLeadAppointment}">
+											<span data-apptId="{!apptData.apptId}">	
+												<lightning:formattedText class="crm_pointTdName" value="{!apptData.customerName}" title="{!apptData.customerName}" />
+											</span>
+											<aura:set attribute="else">
+												<a data-apptId="{!apptData.apptId}" href="javascript:void(0)" onclick="{!c.openCustomerDetailModal}">	
+													<lightning:formattedText class="crm_pointTdName" value="{!apptData.customerName}" title="{!apptData.customerName}" />
+												</a>
+											</aura:set>
+										</aura:if>
+									</td>
+								</lightning:layoutItem>
+							</lightning:layout>
+						</td>
+						<td class="slds-truncate" data-apptId="{!apptData.apptId}">
+							<aura:if isTrue="{!apptData.leadType == 'ICO Appraisal Appointment'}">
+                   				<lightning:icon iconName="utility:check" title="Instant Offer" size="x-small" />
+							</aura:if>
+						</td>
+						<td class="slds-truncate" data-apptId="{!apptData.apptId}">
+							<aura:if isTrue="{!apptData.apptType == 'Express Pick Up'}">
+                   				<lightning:icon iconName="utility:check" title="EPU" size="x-small" />
+							</aura:if>
+						</td>
+						<!--<td class="slds-truncate" data-apptId="{!apptData.apptId}">
+							<aura:if isTrue="{!apptData.apptType == 'Curbside'}">
+                   				<lightning:icon iconName="utility:check" title="Curbside" size="x-small" />
+							</aura:if>
+						</td>-->
+
+	                    <td class="slds-truncate crm_col2" data-apptId="{!apptData.apptId}">
+	                        <aura:if isTrue="{!or(apptData.isUpForGrabs,apptData.assignmentEdit)}">
+	                        	<div ondrop="{!c.dropData}" ondragover="{!c.allowDrop}" data-apptId="{!apptData.apptId}">
+		                        	<lightning:layout>
+		                    			<lightning:layoutItem class="{!v.dragging?'slds-drop-zone slds-drop-zone_drag':''}">
+				                        	<lightning:select aura:id="selectedUser" name="{!apptData.apptId}" label="" title="Assign To?" onchange="{!c.changeSelectValue}" class="crm_col2Data">
+										        <option value="">Unassigned</option>
+										        <aura:iteration items="{!apptData.assignableUsers}" var="assignableUser" indexVar="userIndex">
+										        	<option text="{!assignableUser.Name}" value="{!assignableUser.Id}" selected="{!assignableUser.Id==apptData.assignedId?'true':'false'}"></option>
+										        </aura:iteration>
+										    </lightning:select>	
+									    </lightning:layoutItem>
+									    <aura:if isTrue="{!apptData.assignmentEdit}">
+											<lightning:layoutItem padding="horizontal-small">
+												<div class="crm_customBtnDiv" id="{!'userSave'+dataIndex}" data-value="{!apptData.apptId}" onclick="{!c.saveAssignment}">
+				                        			<lightning:icon iconName="utility:save" alternativeText="{!'Save reassignment from '+apptData.assignedName}" title="Save" size="x-small" />
+				                        		</div>
+											</lightning:layoutItem>
+											<lightning:layoutItem >
+												<div class="crm_customBtnDiv" id="{!'userSave'+dataIndex}" data-value="{!apptData.apptId}" onclick="{!c.cancelAssignment}">
+				                        			<lightning:icon iconName="utility:undo" alternativeText="{!'Undo reassignment from '+apptData.assignedName}" title="Undo" size="x-small" />
+				                        		</div>
+											</lightning:layoutItem>
+										</aura:if>
+									</lightning:layout>
+								</div>
+							    <aura:set attribute="else">
+							    	<lightning:layout class="crm_col2Data">
+                						<lightning:layoutItem>
+									    	<div aura:id="selectedUser" id="{!'user'+apptData.apptId}" data-value="{!apptData.assignedId}">
+			                        			{!apptData.assignedName}
+			                        		</div>
+			                        	</lightning:layoutItem>
+			                        	<lightning:layoutItem padding="horizontal-small">
+			                        		<div class="crm_customBtnDiv" id="{!'userEdit'+dataIndex}" data-value="{!apptData.apptId}" onclick="{!c.editAssignment}">
+			                        			<lightning:icon iconName="utility:edit" alternativeText="{!'Change Assignment of '+apptData.assignedName}" title="Edit" size="x-small" />
+			                        		</div>
+			                        	</lightning:layoutItem>
+			                        </lightning:layout>
+	                        	</aura:set>
+	                        </aura:if>
+	                    </td>
+					<!--	<td class="slds-truncate" data-apptId="{!apptData.apptId}">
+							<lightning:formattedText class="crm_ETA" value="{!if(empty(apptData.eta),'', apptData.eta + ' min')}" title="{!apptData.eta}" />
+						</td> -->
+	                    <td class="slds-truncate crm_button_cell slds-text-align_right">
+							<lightning:buttonGroup>								
+	                    		<lightning:button class="largeButtonIcon" iconName="standard:address" label="Check In" title="Check In" value="{!apptData.apptId}" onclick="{!c.handleCheckIn}"  />
+								<aura:if isTrue="{!not(apptData.isSoftAssigned)}">
+	                    			<lightning:button class="largeButtonIcon" iconName="standard:decision" label="Assign" title="Assign" value="{!apptData.apptId}" onclick="{!c.handleAssign}"  />
+								</aura:if>
+							</lightning:buttonGroup>
+	                    </td>
+						<aura:if isTrue="{!v.displayProgressBar}">
+						<td class="slds-truncate">
+							<c:Progressbar selectedvalue="{!apptData.status}" picklistvalues="{!v.picklistvalues}"/>
+						</td>
+						</aura:if>
+	                    <td class="slds-truncate">
+	                    	<lightning:buttonIcon value="{!apptData.apptId}" onclick="{!c.markNoShow}" variant="border-filled" title="Appointment No Show" iconClass="" type="button" iconName="utility:close" size="medium" />
+
+	                    </td>
+	                </tr>
+	            </aura:iteration>
+                <aura:if isTrue="{!v.moreToLoad}">
+                    <tr>
+                    <td colspan="5" align="right">
+                    <div class="slds-float_right slds-p-right_small">
+                        <lightning:button value="{!dataIndex}" onclick="{!c.loadMore}" variant="border-filled" title="Load More" label="Load More" iconName="utility:switch" iconPosition="right"/>
+                    </div>
+                        </td>
+                </tr>
+                </aura:if>
+	        </tbody>
+    	</table>
+	</lightning:card>
+</aura:component>

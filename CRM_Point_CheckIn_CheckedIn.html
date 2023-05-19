@@ -1,0 +1,217 @@
+<aura:component controller="CRM_PointCheckin_CheckedInController" access="global">
+
+	<aura:registerEvent name="CRMPointWalkinRefreshEvent" type="c:CRMPointWalkinRefreshEvent"/>
+
+    <aura:attribute name="CurrentUserDetails" type="User" access="public"/>
+    <aura:attribute name="CustomersCheckedInList" type="List"/>
+    <aura:attribute name="ErrorMessage" type="String"/>
+    <aura:attribute name="assignableAssociates" type="List" default="[]"/>
+    <aura:attribute name="CurrentUserDetailsLoaded" type="Boolean"/>
+    <aura:attribute name="AddWaitCustomerButtonClicked" type="Boolean"/>
+    <aura:attribute name="UserActiveLocation" type="Location__c" access="public"/>
+    <aura:attribute name="addCustomerOpen" type="Boolean" default="false" />
+    <aura:attribute name="filter" type="String" default="all"/>
+    <aura:attribute name="reloading" type="Boolean" default="false"/>
+    <aura:attribute name="columns" type="Object"/>
+    <aura:attribute name="dragging" type="Boolean" default="false"/>
+    <aura:attribute name="glanceableViewEnabled" type="Boolean" default="false"/>
+	<aura:attribute name="selectedvalue" type="String"/>
+    <aura:attribute name="picklistvalues" type="List"/>
+	<aura:attribute name="displayProgressBar" type="Boolean" default="false"/>
+	
+
+    <aura:attribute name="myTitleName" type="Aura.Component[]">
+        <h2 class="header-title-container">Follow Up Tasks</h2>
+    </aura:attribute>
+
+    <aura:handler name="init" value="{!this}" action="{!c.init}"/>
+    <aura:handler event="c:CRMPointWalkinRefreshEvent" action="{!c.handleRefreshEvent}"/>
+    <aura:handler name="addCustomerEvent" event="c:CRM_WalkIn_Customer_Added" action="{!c.closeAddCustomerModal}"/>
+
+    <!-- <lightning:notificationsLibrary aura:id="notifLib"/> -->
+    <lightning:overlayLibrary aura:id="overlayLib"/>
+
+    <article class="slds-card slds-card_boundary">
+        <!--Card Header-->
+		<div class="slds-clearfix">
+			<div class="slds-float_right">
+                <div class="slds-card__header slds-grid">
+					<lightning:button variant="brand" title="Add customer" label="Add Customer" iconName="utility:add" iconPosition="left" onclick="{!c.openAddCustModal}" />
+				</div>
+			</div>
+        </div>
+
+        <!--Error Section-->
+        <div class="{! empty(v.ErrorMessage) ? 'slds-hide' : 'slds-grid slds-grid_align-left slds-show'}">
+            <lightning:notificationsLibrary aura:id="notifLib"  />
+            <lightning:button name="notice" label="Show Notice" onclick="{!c.showErrorMessage}"/>
+        </div>
+
+        <aura:if isTrue="{!v.reloading}">
+            <lightning:spinner alternativeText="Loading" size="small" />
+        </aura:if>
+
+        <!--Card Body-->
+        <div class="slds-card__body crm_card_body">
+            <table class="slds-table slds-max-medium-table_stacked slds-table_striped" aura:id="crm_checkInTable">
+                <thead>
+                    <tr class="slds-text-title_caps">
+                        <aura:iteration items="{!v.columns}"  var="column" indexVar="columnIndex">
+                            <th class="">
+                                <div class="slds-truncate" title="{!column.label}">
+                                    <aura:if isTrue="{!column.labelVisible=='true'}">
+                                        {!column.label}
+                                    </aura:if>
+                                </div>
+                            </th>
+                        </aura:iteration>
+                    </tr>
+                </thead>
+                <tbody>
+                    <aura:iteration items="{!v.CustomersCheckedInList}"  var="customer" indexVar="index" >
+                        <!--Only show active waiting/checked in customers-->
+                        <aura:if isTrue="{!customer.walkInDetails.Active__c}">
+                            <tr class="slds-hint-parent" >
+                                <td class="slds-truncate slds-text-align_center crm_col0">
+                                    <aura:if isTrue="{!customer.walkInDetails.Check_In_Method__c=='Self'}">
+                                        <lightning:icon iconName="utility:checkin" size="x-small" class="slds-var-p-right_xx-small" title="Self Check-in" variant="success"/>
+                                        <aura:set attribute='else'>
+                                            <aura:if isTrue="{!customer.walkInDetails.Appointment_Time__c==null}">
+                                                <lightning:icon iconName="utility:trail" size="x-small" class="slds-var-p-right_xx-small" title="Walk-in"/>
+                                            </aura:if>
+                                        </aura:set>
+                                    </aura:if>
+                                    <aura:if isTrue="{!customer.walkInDetails.Appointment_Time__c==null}">
+                                        Walk-In
+                                        <aura:set attribute='else'>
+                                            <lightning:formattedDateTime value="{!customer.walkInDetails.Appointment_Time__c}" hour="2-digit" minute="2-digit" />
+                                        </aura:set>
+                                    </aura:if>
+                                </td>
+                                <td class="slds-truncate"><lightning:formattedDateTime value="{!customer.walkInDetails.Time_In__c}" hour="2-digit" minute="2-digit" /></td>
+                                <td class="slds-truncate">{!customer.walkInDetails.Waiting__c}</td>
+                                <section aura:id="custInfoPop" class="slds-popover slds-nubbin_bottom-left slds-hide" role="dialog" aria-label="Dialog Title" aria-describedby="dialog-body-id-2">
+                                    <div class="slds-popover__body" id="dialog-body-id-2">
+                                        <aura:if isTrue="{!not(customer.walkInDetails.Phone__c==null)}">
+                                            <p>
+                                                <lightning:formattedText value="Phone: " />
+                                                <br/>
+                                                {!customer.walkInDetails.Phone__c}
+                                            </p>
+                                            <br/>
+                                        </aura:if>
+                                        <aura:if isTrue="{!not(customer.walkInDetails.Description__c==null)}">
+                                            <p>
+                                                <lightning:formattedText value="{!customer.walkInDetails.Appointment_Id__c==null?'Description: ':'Situation Notes: '}" />
+                                                <br/>
+                                                {!customer.walkInDetails.Description__c}
+                                            </p>
+                                        </aura:if>
+                                    </div>
+                                </section>
+
+                                <td class="slds-truncate">
+                                    <lightning:layoutItem class="crm_pointNameTd" >
+                                        <td class="crm_pointTdText crm_textCol1">
+                                            <a data-rowNum="{!index}" href="javascript:void(0)" onclick="{!c.openCustomerDetailModal}" class="slds-p-right_medium">
+                                                <lightning:formattedText class="crm_pointTdName" value="{!customer.walkInDetails.Name__c}" title="{!customer.walkInDetails.Name__c}" />
+                                            </a>
+                                            <aura:if isTrue="{!customer.walkInDetails.Appointment_Time__c==null}">
+                                                <span data-rowNum="{!index}" onclick="{!c.openCustomerDetailModal}">
+                                                    <lightning:icon iconName="utility:edit" alternativeText="Edit Walkin Record" title="Edit" size="x-small"/>
+                                                </span>
+                                            </aura:if>
+                                        </td>
+                                    </lightning:layoutItem>
+                                </td>
+                                <td class="slds-truncate crm_col2" data-rowNum="{!index}">
+
+									<aura:if isTrue="{!or(empty(customer.walkInDetails.Assigned_User__r.Name),customer.editMode)}">
+                                        <div ondrop="{!c.dropData}" ondragover="{!c.allowDrop}" data-rowNum="{!index}">
+                                            <lightning:layout>
+                                                <lightning:layoutItem class="{!v.dragging?'slds-drop-zone slds-drop-zone_drag':''}">
+                                                    <lightning:select aura:id="assignedAssociate" name="{!index}" label="" title="Assign To?" onchange="{!c.changeSelectValue}" class="crm_col2Data">
+                                                        <aura:if isTrue="{!or(empty(customer.walkInDetails.Assigned_User__r.Name),!customer.editMode)}">
+                                                                <option value="">Unassigned</option>
+                                                        </aura:if>
+                                                        <aura:iteration items="{!v.assignableAssociates}" var="assignableAssociate" indexVar="userIndex">
+                                                            <option text="{!assignableAssociate.Name}" value="{!assignableAssociate.Id}" selected="{!assignableAssociate.Id==customer.walkInDetails.Assigned_User__r.Id?'true':'false'}"></option>
+														</aura:iteration>
+													</lightning:select>	
+												</lightning:layoutItem>
+												<aura:if isTrue="{!customer.editMode}">
+													<lightning:layoutItem padding="horizontal-small">
+														<div class="crm_customBtnDiv" id="{!'userSave'+index}" data-value="{!index}" onclick="{!c.saveAssignment}">
+                                                            <lightning:icon iconName="utility:save" alternativeText="{!'Save reassignment from ' + customer.walkInDetails.Assigned_User__r.Name}" title="Save" size="x-small" />
+                                                        </div>
+													</lightning:layoutItem>
+													<lightning:layoutItem >
+														<div class="crm_customBtnDiv" id="{!'userSave'+index}" data-value="{!index}" onclick="{!c.cancelAssignment}">
+                                                            <lightning:icon iconName="utility:undo" alternativeText="{!'Undo reassignment from ' + customer.walkInDetails.Assigned_User__r.Name}" title="Undo" size="x-small" />
+                                                        </div>
+													</lightning:layoutItem>
+												</aura:if>
+											</lightning:layout>
+										</div>
+										<aura:set attribute="else">
+                                            <lightning:layout class="crm_col2Data">
+                                                <lightning:layoutItem>
+                                                    <div aura:id="assignedAssociate" id="{!'user'+index}" data-value="{!customer.walkInDetails.Assigned_User__r.Id}">
+                                                        {!customer.walkInDetails.Assigned_User__r.Name}
+                                                    </div>
+                                                </lightning:layoutItem>
+                                                <lightning:layoutItem padding="horizontal-small">
+                                                    <div class="crm_customBtnDiv" id="{!'userEdit'+index}" data-value="{!index}" onclick="{!c.editAssignment}">
+                                                        <lightning:icon iconName="utility:edit" alternativeText="{!'Change Assignment of ' + customer.walkInDetails.Assigned_User__r.Name}" title="Edit" size="x-small" />
+                                                    </div>
+                                                </lightning:layoutItem>
+											</lightning:layout>
+                                        </aura:set>
+									</aura:if>
+                                </td>
+
+                                <td class="slds-truncate">
+							<lightning:formattedText class="crm_ETA" value="{!if(empty(customer.eta),'', customer.eta + ' min')}" title="{!customer.eta}" />
+							  </td>
+                              
+                                <td class="slds-truncate">
+									<aura:if isTrue="{!not(empty(customer.walkInDetails.Assigned_User__r.Name))}">
+										<lightning:button class="assignButton slds-float_right" iconName="standard:decision" label="Assign" value="{!index}" onclick="{!c.confirmAssignAssociate}" />
+										<aura:set attribute="else">
+											<lightning:button class="assignButton slds-float_right" iconName="standard:decision" label="Assign" value="{!index}" onclick="{!c.assignAssociate}" />
+										</aura:set>
+									</aura:if>
+                                </td>
+								<aura:if isTrue="{!v.displayProgressBar}">
+									<td class="slds-truncate">
+										<c:Progressbar selectedvalue="{!v.customer.status}" picklistvalues="{!v.picklistvalues}"/>
+									</td>
+								</aura:if>
+                                <td class="slds-truncate">
+                                    <lightning:buttonIcon value="{!customer.walkInDetails.Id}" onclick="{!c.removeFromWaitList}" title="Remove customer from Checked - In" iconClass="" variant="border-filled" type="button" iconName="utility:close" size="medium"/>
+                                </td>
+                            </tr>
+                        </aura:if>
+                    </aura:iteration>
+                </tbody>
+            </table>
+        </div>
+
+        <!--Add Customer Modal -->
+        <aura:if isTrue="{!v.CurrentUserDetailsLoaded}">
+            <div role="dialog" tabindex="-1" aria-labelledby="header43" aura:id="AddCustomerModal" class="slds-modal">
+                <div class="slds-modal__container">
+                    <header class="slds-modal__header">
+                        <lightning:buttonIcon class="slds-modal__close" iconName="utility:close" variant="bare-inverse" onclick="{!c.closeAddCustomerModal}" alternativeText="Close" />
+                    </header>
+                    <div class="slds-modal__content slds-p-around_medium">
+                        <div>
+                            <c:CRM_PointCheckin_AddCustomer CurrentUserDetails="{!v.CurrentUserDetails}" UserActiveLocation="{!v.UserActiveLocation}" addCustomerOpen="{!v.addCustomerOpen}"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="slds-backdrop " aura:id="AddCustomerModalBackDrop"></div>
+        </aura:if>
+    </article>
+</aura:component>
